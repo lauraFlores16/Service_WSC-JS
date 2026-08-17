@@ -1,0 +1,144 @@
+// Autómata celular — port FIEL de backend/services/automata_service.py
+// (que a su vez es fiel a tus scripts simular_evento_real.py / validacion_multievento.py).
+//
+// Estados: 0=sin_quemar, 1=ardiendo, 2=quemado, 3=inerte
+// Fórmula de propagación (idéntica a la de Python):
+//   f_pend   = 1 + K_PENDIENTE * pendiente(vecino)
+//   f_viento = 1 + K_VIENTO * vel_viento * max(0, dot(direccion, viento))
+//   f_veg    = 0.5 + ndvi(vecino)
+//   f_hum    = max(1 - 0.5 * humedad(vecino), 0.1)
+//   prob     = p_base * f_pend * f_viento * f_veg * f_hum
+// Barrera: ndvi(vecino) < NDVI_BARRERA (0.10) bloquea el fuego.
+// El slider de temperatura reduce la humedad efectiva (K_TEMPERATURA por °C),
+// misma heurística documentada que en el backend Python.
+
+const SIN_QUEMAR = 0, ARDIENDO = 1, QUEMADO = 2, INERTE = 3;
+const ESTADO_API = { [ARDIENDO]: "ardiendo", [QUEMADO]: "quemada" };
+
+const K_PENDIENTE = 0.03;
+const K_VIENTO = 0.15;
+const K_TEMPERATURA = 0.01;
+const NDVI_BARRERA = 0.10;
+
+function factorViento(df, dc, vu, vv) {
+  const vel = Math.sqrt(vu * vu + vv * vv);
+  if (vel === 0) return 1.0;
+  const dot = (dc * vu + (-df) * vv) / (vel + 1e-9);
+  return 1.0 + K_VIENTO * vel * Math.max(0, dot);
+}
+
+export function ejecutarAutomata(gridCeldas, parametros) {
+  const {
+    foco_fila, foco_columna, p_base, multiplicador_viento,
+    delta_humedad, delta_temperatura_c, num_iteraciones,
+  } = parametros;
+
+  const filas = Math.max(...gridCeldas.map((c) => c.fila)) + 1;
+  const columnas = Math.max(...gridCeldas.map((c) => c.columna)) + 1;
+  const n = filas * columnas;
+  const idx = (f, c) => f * columnas + c;
+
+  // Grids planos (equivalente a los np.zeros de Python)
+  const pendiente = new Float32Array(n);
+  const ndvi = new Float32Array(n);
+  const humedad = new Float32Array(n);
+  const vientoU = new Float32Array(n);
+  const vientoV = new Float32Array(n);
+  const barrera = new Uint8Array(n);
+  const valida = new Uint8Array(n);
+  const celdaId = new Array(n);
+  const latPos = new Float64Array(n);
+  const lonPos = new Float64Array(n);
+
+  const ajusteHumedadTemp = K_TEMPERATURA * delta_temperatura_c;
+
+  for (const row of gridCeldas) {
+    const i = idx(row.fila, row.columna);
+    valida[i] = 1;
+    const ndviVal = row.ndvi ?? 0.3;
+    const humedadVal = row.humedad ?? 0.3;
+    pendiente[i] = row.pendiente_grados ?? 0;
+    ndvi[i] = ndviVal;
+    humedad[i] = Math.min(Math.max(humedadVal + delta_humedad - ajusteHumedadTemp, 0), 1);
+    vientoU[i] = (row.viento_u ?? 0) * multiplicador_viento;
+    vientoV[i] = (row.viento_v ?? 0) * multiplicador_viento;
+    barrera[i] = ndviVal < NDVI_BARRERA ? 1 : 0;
+    celdaId[i] = row.id;
+    latPos[i] = row.lat;
+    lonPos[i] = row.lon;
+  }
+
+  // Estado inicial
+  let estados = new Uint8Array(n).fill(INERTE);
+  for (let i = 0; i < n; i++) {
+    if (valida[i]) estados[i] = barrera[i] ? INERTE : SIN_QUEMAR;
+  }
+
+  const iFoco = idx(foco_fila, foco_columna);
+  if (!valida[iFoco]) {
+    throw new Error(
+      `La celda foco (fila=${foco_fila}, columna=${foco_columna}) no pertenece al grid válido de Apolo.`
+    );
+  }
+  estados[iFoco] = ARDIENDO;
+
+  const ahora = new Date();
+
+  function construirIteracion(numIter, grid) {
+    const celdas = [];
+    let ardiendo = 0, quemadas = 0;
+    for (let i = 0; i < n; i++) {
+      if (!valida[i]) continue;
+      const e = grid[i];
+      if (e === ARDIENDO) ardiendo++;
+      else if (e === QUEMADO) quemadas++;
+      if (e === ARDIENDO || e === QUEMADO) {
+        celdas.push({ celda_id: celdaId[i], lat: latPos[i], lon: lonPos[i], estado: ESTADO_API[e] });
+      }
+    }
+    return {
+      iteracion: numIter,
+      timestamp_simulado: new Date(ahora.getTime() + 15 * 60000 * numIter).toISOString(),
+      celdas,
+      num_celdas_ardiendo: ardiendo,
+      num_celdas_quemadas: quemadas,
+    };
+  }
+
+  function paso(grid) {
+    const nuevo = grid.slice();
+    for (let f = 0; f < filas; f++) {
+      for (let c = 0; c < columnas; c++) {
+        const i = idx(f, c);
+        if (grid[i] !== ARDIENDO) continue;
+        nuevo[i] = QUEMADO;
+        for (let df = -1; df <= 1; df++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (df === 0 && dc === 0) continue;
+            const nf = f + df, nc = c + dc;
+            if (nf < 0 || nf >= filas || nc < 0 || nc >= columnas) continue;
+            const j = idx(nf, nc);
+            if (grid[j] !== SIN_QUEMAR) continue;
+            if (barrera[j]) continue;
+            const fPend = 1 + K_PENDIENTE * pendiente[j];
+            const fViento = factorViento(df, dc, vientoU[i], vientoV[i]);
+            const fVeg = 0.5 + ndvi[j];
+            const fHum = Math.max(1 - 0.5 * humedad[j], 0.1);
+            const p = Math.min(Math.max(p_base * fPend * fViento * fVeg * fHum, 0), 1);
+            if (Math.random() < p) nuevo[j] = ARDIENDO;
+          }
+        }
+      }
+    }
+    return nuevo;
+  }
+
+  const iteraciones = [construirIteracion(0, estados)];
+  for (let i = 1; i <= num_iteraciones; i++) {
+    estados = paso(estados);
+    iteraciones.push(construirIteracion(i, estados));
+    if (iteraciones[iteraciones.length - 1].num_celdas_ardiendo === 0) break;
+  }
+
+  return iteraciones;
+}

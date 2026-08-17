@@ -1,0 +1,101 @@
+[
+  {
+    "nombre": "Temporada seca 2021",
+    "anio": 2021,
+    "fecha_inicio": "2021-09-01",
+    "fecha_fin": "2021-11-25",
+    "duracion_dias": 86,
+    "area_km2": 159.0,
+    "celdas_unicas": 636,
+    "velocidad_km2_dia": 1.85,
+    "foco": {
+      "fila": 177,
+      "columna": 181,
+      "lat": -14.7481,
+      "lon": -68.2999
+    },
+    "variables_promedio": {
+      "ndvi": 0.2698,
+      "humedad": 0.3747,
+      "velocidad_viento": 0.3974,
+      "temperatura_aire": 18.2631,
+      "precipitacion": 3.8698
+    },
+    "validacion": {
+      "metodo": "dnbr",
+      "area_real_km2": 159.0,
+      "area_sim_km2": 2944.75,
+      "P_BASE": 0.45,
+      "IoU": 1.4,
+      "Precision": 1.4,
+      "Recall": 37.1,
+      "F1": 2.7
+    }
+  },
+  {
+    "nombre": "Temporada seca 2023 (crítico)",
+    "anio": 2023,
+    "fecha_inicio": "2023-09-01",
+    "fecha_fin": "2023-11-30",
+    "duracion_dias": 91,
+    "area_km2": 827.25,
+    "celdas_unicas": 3309,
+    "velocidad_km2_dia": 9.09,
+    "foco": {
+      "fila": 218,
+      "columna": 177,
+      "lat": -14.931,
+      "lon": -68.3204
+    },
+    "variables_promedio": {
+      "ndvi": 0.2687,
+      "humedad": 0.374,
+      "velocidad_viento": 0.3932,
+      "temperatura_aire": 18.2826,
+      "precipitacion": 3.881
+    },
+    "validacion": {
+      "metodo": "firms",
+      "area_real_km2": 827.25,
+      "area_sim_km2": 3763.75,
+      "P_BASE": 0.8,
+      "IoU": 5.5,
+      "Precision": 5.8,
+      "Recall": 53.7,
+      "F1": 10.4
+    }
+  },
+  {
+    "nombre": "Temporada seca 2024",
+    "anio": 2024,
+    "fecha_inicio": "2024-08-03",
+    "fecha_fin": "2024-10-31",
+    "duracion_dias": 90,
+    "area_km2": 470.75,
+    "celdas_unicas": 1883,
+    "velocidad_km2_dia": 5.23,
+    "foco": {
+      "fila": 223,
+      "columna": 182,
+      "lat": -14.9556,
+      "lon": -68.2968
+    },
+    "variables_promedio": {
+      "ndvi": 0.2705,
+      "humedad": 0.3745,
+      "velocidad_viento": 0.4043,
+      "temperatura_aire": 18.2021,
+      "precipitacion": 3.8294
+    },
+    "validacion": {
+      "metodo": "firms",
+      "area_real_km2": 470.75,
+      "area_sim_km2": 3227.0,
+      "P_BASE": 0.6,
+      "IoU": 4.8,
+      "Precision": 5.1,
+      "Recall": 51.6,
+      "F1": 9.2
+    }
+  }
+]
